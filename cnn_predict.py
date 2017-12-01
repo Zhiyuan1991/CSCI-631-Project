@@ -29,6 +29,7 @@ import sys
 import pickle
 import csv
 
+from utils import *
 
 def get_filenames():
     """
@@ -66,23 +67,30 @@ def predict(session,         # TensorFlow session
         i = j  # Update indices for next batch
     
     ## CHANGE NUMBERED CLASSES BACK TO SYMBOLS ##
+    '''
     if(len(sys.argv) == 5):
-        SYMB_DICT = pickle.load(open('../binary_data/SYMB_DICT_W_JUNK', 'rb'))
+        SYMB_DICT = pickle.load(open('SYMB_DICT_W_JUNK', 'rb'))
     else:
-        SYMB_DICT = pickle.load(open('../binary_data/SYMB_DICT', 'rb'))
+        SYMB_DICT = pickle.load(open('SYMB_DICT', 'rb'))
     symb_pred = []
     for i in range(len(cls_pred)):
         symb_pred.append(list(SYMB_DICT.keys())[list(SYMB_DICT.values()).index(cls_pred[i])])
+    '''
+    symb_pred = []
+    for i in range(len(cls_pred)):
+        symb_pred.append(cls_pred[i])
 
     ## WRITE NEW CSV FILE WITH RESULTS ##
     if(sys.argv[3] != 'NA'):
         filenames = get_filenames()
-        with open('cnn_' + sys.argv[2] + '_output.csv', 'w', newline='') as csvfile:
+        print("writing result to "+sys.argv[2] + '_output.csv')
+        with open(sys.argv[2] + '_output.csv', 'w') as csvfile:
             writer = csv.writer(csvfile, quoting=csv.QUOTE_NONE)
             for i in range(len(data)):
                 writer.writerow([filenames[i], symb_pred[i]])
     else:
-        with open('cnn_' + sys.argv[2] + '_output.csv', 'w', newline='') as csvfile:
+        print("writing result to "+sys.argv[2] + '_output.csv')
+        with open(sys.argv[2] + '_output.csv', 'w') as csvfile:
             writer = csv.writer(csvfile, quoting=csv.QUOTE_NONE)
             for i in range(len(data)):
                 writer.writerow([symb_pred[i]])
@@ -92,7 +100,9 @@ if __name__ == '__main__':
     if(len(sys.argv) == 4 or len(sys.argv) == 5):
         
         ## GET DATA FROM CSV FILE ##
-        data = pickle.load(open('../binary_data/' + sys.argv[2], 'rb'))
+        #data = pickle.load(open('../binary_data/' + sys.argv[2], 'rb'))
+        test_mat,test_cls=read_cifar_batch_data(sys.argv[2])
+        data=test_mat
         
         # Create a clean graph and import the MetaGraphDef nodes
         tf.reset_default_graph()
@@ -105,6 +115,10 @@ if __name__ == '__main__':
           y_true = all_vars[1]
           y_pred_cls = all_vars[2]
           predict(sess, data, x, y_true, y_pred_cls)
+
+          test_data=data = input_data(test_mat, test_cls, test_mat, test_cls)
+          test_data.scramble()
+          print_test_accuracy(sess, test_data, x, y_true, y_pred_cls,128)
           
     else:
         print('Wrong number of arguments.')

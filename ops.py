@@ -99,17 +99,22 @@ def weight_variable(shape):
     #return tf.get_variable('W', shape, initializer=tf.random_normal_initializer(0., 0.02))
    	return tf.get_variable('W', shape, initializer=tf.contrib.layers.xavier_initializer(uniform=False,dtype=tf.float32))
 
-def bias_variable(shape):
-    return tf.get_variable('b', shape, initializer=tf.constant_initializer(0.))
+def bias_variable(shape,value=0.0):
+    return tf.get_variable('b', shape, initializer=tf.constant_initializer(value))
 
-def conv2d(x, shape, name, bias=False, stride=1):
+def lrelu(x, leak=0.2, name="lrelu"):
+    with tf.variable_scope(name):
+        f1 = 0.5 * (1 + leak)
+        f2 = 0.5 * (1 - leak)
+        return f1 * x + f2 * abs(x)
+
+def conv2d(x, shape, name, bias=0.0, stride=1):
     with tf.variable_scope(name):
         W = weight_variable(shape)
         h = tf.nn.conv2d(x, W, strides=[1, stride, stride, 1], padding='SAME')
-        if bias:
-            b = bias_variable([shape[-1]])
-            h = h + b
-        return h,W
+        b = bias_variable([shape[-1]],bias)
+        h = h + b
+        return lrelu(h),W
 
 def pool_layer(inputs, size, stride, name):
 	with tf.variable_scope(name) as scope:
@@ -173,7 +178,7 @@ def _get_weights_var(name, shape, decay=False):
             tf.add_to_collection('losses', weight_loss)
         return var
 
-def fc_layer(inputs, neurons, decay, name, relu=True, bn=False):
+def fc_layer(inputs, neurons, decay, name, bias=0.0,relu=True, bn=False):
         with tf.variable_scope(name) as scope:
             if len(inputs.get_shape().as_list()) > 2:
                 # We need to reshape inputs:
@@ -189,15 +194,17 @@ def fc_layer(inputs, neurons, decay, name, relu=True, bn=False):
             weights = _get_weights_var('weights',
                                             shape=[dim,neurons],
                                             decay=decay)
+
             biases = tf.get_variable('biases',
                                     shape=[neurons],
                                     dtype=tf.float32,
-                                    initializer=tf.constant_initializer(0.0))
+                                    initializer=tf.constant_initializer(bias))
             x = tf.add(tf.matmul(reshaped, weights), biases)
             if bn:
                 x = tf.layers.batch_normalization(x, training=self.training)
             if relu:
-                outputs = tf.nn.relu(x)
+                #outputs = tf.nn.relu(x)
+                outputs=lrelu(x)
             else:
                 outputs = x
 

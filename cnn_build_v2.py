@@ -46,50 +46,6 @@ import os
 
 from utils import *
 from ops import *
-
-class input_data:
-    """
-    Class to help ease the use of the input data with optimizer.
-    """
-    def __init__(self, train_mat, train_cls, test_mat, test_cls):
-        self.train_mat = train_mat  # Training image matrix
-        self.train_cls = train_cls  # Training image true classes one hot encoded
-        self.test_mat = test_mat  # Testing image matrix
-        self.test_cls = test_cls  # Testing image true classes one hot encoded
-        self.num_train_samp = len(train_mat)  # Calculate this once
-        self.num_test_samp = len(test_mat)  # Calculate this once
-        self.i = 0  # Index into batch sampling
-        
-    def scramble(self):
-        """
-        Scrambles the training and testing row orders.
-        """
-        new_order = random.sample(range(self.num_train_samp), self.num_train_samp)
-        self.train_mat = self.train_mat[new_order, :]
-        self.train_cls = self.train_cls[new_order, :]
-        
-        new_order = random.sample(range(self.num_test_samp), self.num_test_samp)
-        self.test_mat = self.test_mat[new_order, :]
-        self.test_cls = self.test_cls[new_order, :]
-        
-    def next_batch(self, train_batch_size):
-        """
-        Returns a batch of training data of the given size and updates index.
-        """
-        if(self.i + train_batch_size >= self.num_train_samp):
-            x_batch = self.train_mat[self.i:self.num_train_samp-1, :]
-            y_true_batch = self.train_cls[self.i:self.num_train_samp-1, :]
-            
-            diff = (self.i + train_batch_size) - self.num_train_samp
-            x_batch = np.vstack((x_batch, self.train_mat[0:diff, :]))
-            y_true_batch = np.vstack((y_true_batch, self.train_cls[0:diff, :]))
-            self.i = diff
-        else:
-            x_batch = self.train_mat[self.i:self.i+train_batch_size, :]
-            y_true_batch = self.train_cls[self.i:self.i+train_batch_size, :]
-            self.i += train_batch_size
-            
-        return x_batch, y_true_batch
     
 ## MODEL HYPERPARAMETERS & PROGRAM CONSTANTS ##
 
@@ -115,14 +71,14 @@ LAMBDA = 0.0001
 
 #************ CNN *****************
 # Convolutional Layer 1.
-filter_size1 = 5         # Convolution filters are 10 x 10 pixels
+filter_size1 = 7         # Convolution filters are 10 x 10 pixels
 num_filters1 = 64         # There are 16 of these filters
 # Convolutional Layer 2.
-filter_size2 = 3        # Convolution filters are 8 x 8 pixels
+filter_size2 = 5        # Convolution filters are 8 x 8 pixels
 num_filters2 = 96         # There are 18 of these filters
 # Convolutional Layer 3.
 filter_size3 = 3          # Convolution filters are 6 x 6 pixels
-num_filters3 = 96         # There are 24 of these filters
+num_filters3 = 128         # There are 24 of these filters
 # Number of neurons in fully-connected layer 1
 fc1_size = 384
 # Number of neurons in fully-connected layer 2
@@ -157,44 +113,13 @@ def optimize(session,           # TensorFlow session
         if i % 100 == 0: # Print status every 100 iterations
             # Calculate the accuracy on the testing set
             acc = session.run(accuracy, feed_dict={x: data.test_mat, y_true: data.test_cls})
-            msg = "Optimization Iteration: {0:>6}...Testing Accuracy: {1:>6.1%}"
+            msg = "Iteration: {0:>6}   Testing Accuracy: {1:>6.1%}"
             print(msg.format(i, acc))
 
     total_iterations += num_iterations  # Update the total number of iterations performed
     end_time = time.time()
     time_dif = end_time - start_time
     print("Time usage: " + str(timedelta(seconds=int(round(time_dif)))))
-
-def print_test_accuracy(session,         # TensorFlow session
-                        data,            # The raw data class instance
-                        x,               # Place holder for image data
-                        y_true,          # Placeholder for true classes for the images
-                        y_pred_cls):     # Placeholder for our model's predicted classes
-    """
-    Computes and prints the test set accuracy.
-    """
-    num_test = len(data.test_mat)   # Number of images in the test set
-    cls_pred = np.zeros(shape=num_test, dtype=np.int)  # Allocate an array for the predicted classes
-    
-    i = 0  # The starting index for the next batch is denoted i
-    while i < num_test:
-        j = min(i + test_batch_size, num_test)  # End index for next batch
-        images = data.test_mat[i:j, :]
-        labels = data.test_cls[i:j, :]
-
-        # Create a feed-dict with these images and labels.
-        feed_dict = {x: images,
-                     y_true: labels}
-        
-        cls_pred[i:j] = session.run(y_pred_cls, feed_dict=feed_dict)  # Calculate the predicted class
-        i = j  # Update indices for next batch
-
-    cls_true = np.argmax(data.test_cls, axis=1)  # True class-numbers of the test-set
-    correct = (cls_true == cls_pred)  # Create a boolean array whether each image is correctly classified
-    correct_sum = correct.sum()  # Calculate the number of correctly classified images
-    acc = float(correct_sum) / num_test  # Classification accuracy is (# correct/total)
-    msg = "Accuracy on Test-Set: {0:.1%} ({1} / {2})"
-    print(msg.format(acc, correct_sum, num_test))
 
 def build_cnn(data):
     """
@@ -210,7 +135,10 @@ def build_cnn(data):
     y_true_cls = tf.argmax(y_true, dimension=1)  # back into class #'s
 
     layer_conv1, weights_conv1 = \
-        conv2d(x_image,[filter_size1,filter_size1,num_channels,num_filters1],'conv1')
+        conv2d(x_image,
+        	[filter_size1,filter_size1,num_channels,num_filters1],
+        	'conv1',
+        	bias=0.0)
 
     layer_conv1=pool_layer(layer_conv1,
         size=3,
@@ -220,7 +148,10 @@ def build_cnn(data):
     layer_conv1=lrn_layer(layer_conv1,name='norm1')
 
     layer_conv2, weights_conv2 = \
-        conv2d(layer_conv1,[filter_size2,filter_size2,num_filters1,num_filters2],'conv2')
+        conv2d(layer_conv1,
+        	[filter_size2,filter_size2,num_filters1,num_filters2],
+        	'conv2',
+        	bias=0.1)
 
     layer_conv2=pool_layer(layer_conv2,
         size=3,
@@ -228,6 +159,20 @@ def build_cnn(data):
         name='pool2')
 
     layer_conv2=lrn_layer(layer_conv2,name='norm2')
+
+    layer_conv3, weights_conv3 = \
+        conv2d(layer_conv2,
+        	[filter_size3,filter_size3,num_filters2,num_filters3],
+        	'conv3',
+        	bias=0.1)
+    
+    layer_conv3=pool_layer(layer_conv3,
+        size=3,
+        stride=2,
+        name='pool3')
+    
+
+    layer_conv3=lrn_layer(layer_conv3,name='norm3')
 
     '''
     dim = np.prod(layer_conv2.get_shape().as_list()[1:])
@@ -237,15 +182,21 @@ def build_cnn(data):
     layer_fc3=linear(layer_fc2,[fc2_size,num_classes],'fc3',relu=False, bias=True)
     '''
 
-    layer_fc1=fc_layer(layer_conv2,
-    	neurons=384,
+    layer_fc1=fc_layer(layer_conv3,
+    	neurons=fc1_size,
     	decay=True,
-    	name='fc1')
+    	name='fc1',
+    	bias=0.1)
+
+    h_fc1_drop = tf.nn.dropout(layer_fc1, 0.5)
 
     layer_fc2=fc_layer(layer_fc1,
-    	neurons=192,
+    	neurons=fc2_size,
     	decay=True,
-    	name='fc2')
+    	name='fc2',
+    	bias=0.1)
+
+    #h_fc2_drop = tf.nn.dropout(layer_fc2, 0.5)
 
     layer_fc3=fc_layer(layer_fc2,
     	neurons=10,
@@ -283,7 +234,7 @@ def build_cnn(data):
             print('How many iterations of training?')
             num_iters = int(input())
             optimize(session, optimizer, data, x, y_true, accuracy, train_batch_size, total_iterations, num_iters)
-            print_test_accuracy(session, data, x, y_true, y_pred_cls)
+            print_test_accuracy(session, data, x, y_true, y_pred_cls,test_batch_size)
             total_iterations += num_iters
             print('Total Number of iterations so far is: ' + str(total_iterations) + '. Keep Going? Y or N')
             if(input() == "Y"):
@@ -304,8 +255,8 @@ def build_cnn(data):
                 break
     else:
         num_iters = int(sys.argv[5])
-        optimize(session, optimizer, data, x, y_true, accuracy, train_batch_size, 0, num_iters)
-        print_test_accuracy(session, data, x, y_true, y_pred_cls)
+        optimize(session, optimizer, data, x, y_true, accuracy,train_batch_size, 0, num_iters)
+        print_test_accuracy(session, data, x, y_true, y_pred_cls,test_batch_size)
         print('Saving Model to Disk...')
         saver = tf.train.Saver()
         save_dir = sys.argv[1] + '_saved_model/'
@@ -325,27 +276,27 @@ if __name__ == '__main__':
         try:
             #train_mat = pickle.load(open('../binary_data/' + sys.argv[1], "rb" ))
             #train_cls = pickle.load(open('../binary_data/' + sys.argv[2], "rb" ))
-            m1,c1=read_cifar_batch_data('./cifar/data_batch_1')
-            m2,c2=read_cifar_batch_data('./cifar/data_batch_2')
-            m3,c3=read_cifar_batch_data('./cifar/data_batch_3')
-            m4,c4=read_cifar_batch_data('./cifar/data_batch_4')
-            m5,c5=read_cifar_batch_data('./cifar/data_batch_5')
+            m1,c1=read_cifar_batch_data_lab('./cifar/data_batch_1')
+            m2,c2=read_cifar_batch_data_lab('./cifar/data_batch_2')
+            m3,c3=read_cifar_batch_data_lab('./cifar/data_batch_3')
+            m4,c4=read_cifar_batch_data_lab('./cifar/data_batch_4')
+            m5,c5=read_cifar_batch_data_lab('./cifar/data_batch_5')
             train_mat=np.vstack((m1,m2,m3,m4,m5))
             train_cls=np.vstack((c1,c2,c3,c4,c5))
             print train_mat.shape
             print train_cls.shape
             if(sys.argv[3] == 'NA'):
                 #test_mat = train_mat[0:2,:]  # dummy value
-                test_mat,_=read_cifar_batch_data('./cifar/test_batch')
+                test_mat,_=read_cifar_batch_data_lab('./cifar/test_batch')
             else:
                 #test_mat = pickle.load(open('../binary_data/' + sys.argv[3], "rb" ))
-                test_mat,_=read_cifar_batch_data(sys.argv[3])
+                test_mat,_=read_cifar_batch_data_lab(sys.argv[3])
             if(sys.argv[4] == 'NA'):
                 #test_cls = train_cls[0:2,:]  # dummy value
-                _,test_cls=read_cifar_batch_data('./cifar/test_batch')
+                _,test_cls=read_cifar_batch_data_lab('./cifar/test_batch')
             else:
                 #test_cls = pickle.load(open('../binary_data/' + sys.argv[4], "rb" ))
-                _,test_cls=read_cifar_batch_data(sys.argv[3])
+                _,test_cls=read_cifar_batch_data_lab(sys.argv[3])
         except ValueError:
             print("Wrong file or file path provided.")
             sys.exit(1)

@@ -43,7 +43,9 @@ import sys
 import pickle
 import random
 import os
+
 from utils import *
+from ops import *
 
 class input_data:
     """
@@ -103,9 +105,9 @@ img_shape = (img_size, img_size)
 
 #********** learning *********** 
 # Use batch training
-train_batch_size = 700
+train_batch_size = 128
 # Split the test-set into smaller batches of this size to limit RAM usage
-test_batch_size = 700
+test_batch_size = 128
 # Learning rate for the ADAM optimizer
 LEARNING_RATE = 0.0002
 # L2 penalty parameter
@@ -113,112 +115,18 @@ LAMBDA = 0.0001
 
 #************ CNN *****************
 # Convolutional Layer 1.
-filter_size1 = 3         # Convolution filters are 10 x 10 pixels
-num_filters1 = 32         # There are 16 of these filters
+filter_size1 = 6        # Convolution filters are 10 x 10 pixels
+num_filters1 = 24         # There are 16 of these filters
 # Convolutional Layer 2.
-filter_size2 = 3          # Convolution filters are 8 x 8 pixels
-num_filters2 = 64         # There are 18 of these filters
+filter_size2 = 5        # Convolution filters are 8 x 8 pixels
+num_filters2 = 36         # There are 18 of these filters
 # Convolutional Layer 3.
-filter_size3 = 3          # Convolution filters are 6 x 6 pixels
-num_filters3 = 64         # There are 24 of these filters
-# Convolutional Layer 4.
-filter_size4 = 3          # Convolution filters are 6 x 6 pixels
-num_filters4 = 64         # There are 24 of these filters
+filter_size3 = 5          # Convolution filters are 6 x 6 pixels
+num_filters3 = 42         # There are 24 of these filters
 # Number of neurons in fully-connected layer 1
-fc1_size = 600
+fc1_size = 198
 # Number of neurons in fully-connected layer 2
-fc2_size = 100
-
-
-def new_weights(shape):
-    """
-    Returns new TensorFlow weights in the given shape with normally distributed random initializations
-    """
-    return tf.Variable(tf.truncated_normal(shape, stddev=0.05))
-
-
-def new_biases(length):
-    """
-    Returns new TensorFlow biases with the given length with initialization 0.05
-    """
-    return tf.Variable(tf.constant(0.05, shape=[length]))
-
-
-def new_conv_layer(input,              # The previous layer
-                   num_input_channels, # Num. channels in prev. layer
-                   filter_size,        # Width and height of each filter
-                   num_filters,        # Number of filters
-                   use_pooling=True):  # Use 2x2 max-pooling
-    """
-    Helper function for creating a new convolutional layer.
-    """
-
-    # Shape of the filter-weights for the convolution.
-    shape = [filter_size, filter_size, num_input_channels, num_filters]
-
-    # Create new weights (filters) with the given shape.
-    weights = new_weights(shape=shape)
-
-    # Create new biases, one for each filter.
-    biases = new_biases(length=num_filters)
-
-    # Create the TensorFlow operation for convolution.
-    layer = tf.nn.conv2d(input=input,
-                         filter=weights,
-                         strides=[1, 1, 1, 1],
-                         padding='SAME')
-
-    layer += biases   # Adding biases to the results of the convolution.
-
-    if use_pooling:  # Use pooling to down-sample the image resolution?
-        layer = tf.nn.max_pool(value=layer,
-                               ksize=[1, 2, 2, 1],
-                               strides=[1, 2, 2, 1],
-                               padding='SAME')  # This is 2x2 max-pooling
-
-    layer = tf.nn.relu(layer)  # Rectified Linear Unit (ReLU).
-    
-    return layer, weights
-
-
-def flatten_layer(layer):
-    """
-    Reduces a 4d tensor to a 2d tensor to be able to be fed into a fully connected layer.
-    """
-
-    layer_shape = layer.get_shape()  # Shape of the input layer
-
-    num_features = layer_shape[1:4].num_elements()  # img_height * img_width * num_channels
-    
-    # Reshape the layer to [num_images, num_features]
-    layer_flat = tf.reshape(layer, [-1, num_features])
-
-    # The shape of the flattened layer is now: [num_images, img_height * img_width * num_channels]
-    return layer_flat, num_features
-
-
-def new_fc_layer(input,          # The previous layer.
-                 num_inputs,     # Num. inputs from prev. layer.
-                 num_outputs,    # Num. outputs.
-                 use_relu=True): # Use Rectified Linear Unit (ReLU)?
-    """
-    Helper function for creating a new fully connected layer.
-    """
-
-    # Create new weights and biases.
-    weights = new_weights(shape=[num_inputs, num_outputs])
-    biases = new_biases(length=num_outputs)
-
-    # Calculate the layer as the matrix multiplication of
-    # the input and weights, and then add the bias-values.
-    layer = tf.matmul(input, weights) + biases
-
-    # Use ReLU?
-    if use_relu:
-        layer = tf.nn.relu(layer)        
-
-    return layer
-
+fc2_size = 124
 
 def optimize(session,           # TensorFlow session
              optimizer,         # Tensorflow optimization method object
@@ -257,7 +165,6 @@ def optimize(session,           # TensorFlow session
     time_dif = end_time - start_time
     print("Time usage: " + str(timedelta(seconds=int(round(time_dif)))))
 
-
 def print_test_accuracy(session,         # TensorFlow session
                         data,            # The raw data class instance
                         x,               # Place holder for image data
@@ -288,7 +195,6 @@ def print_test_accuracy(session,         # TensorFlow session
     acc = float(correct_sum) / num_test  # Classification accuracy is (# correct/total)
     msg = "Accuracy on Test-Set: {0:.1%} ({1} / {2})"
     print(msg.format(acc, correct_sum, num_test))
-    
 
 def build_cnn(data):
     """
@@ -302,6 +208,7 @@ def build_cnn(data):
 
     y_true = tf.placeholder(tf.float32, shape=[None, num_classes], name='y_true')  # as one hot encoded vector
     y_true_cls = tf.argmax(y_true, dimension=1)  # back into class #'s
+    
     
     ## FIRST CONVOLUTIONAL LAYER ##
     layer_conv1, weights_conv1 = \
@@ -318,7 +225,8 @@ def build_cnn(data):
                        filter_size=filter_size2,
                        num_filters=num_filters2,
                        use_pooling=True)
-        
+    
+    
     ## THIRD CONVOLUTIONAL LAYER ##
     layer_conv3, weights_conv3 = \
         new_conv_layer(input=layer_conv2,
@@ -327,16 +235,9 @@ def build_cnn(data):
                        num_filters=num_filters3,
                        use_pooling=False)
 
-    ## THIRD CONVOLUTIONAL LAYER ##
-    layer_conv4, weights_conv4 = \
-        new_conv_layer(input=layer_conv3,
-                       num_input_channels=num_filters3,
-                       filter_size=filter_size4,
-                       num_filters=num_filters4,
-                       use_pooling=False)
-        
+     
     ## FLATTENED LAYER ##
-    layer_flat, num_features = flatten_layer(layer_conv4)
+    layer_flat, num_features = flatten_layer(layer_conv3)
     
     ## FIRST FULLY CONNECTED LAYER ##
     layer_fc1 = new_fc_layer(input=layer_flat,
@@ -344,11 +245,10 @@ def build_cnn(data):
                              num_outputs=fc1_size,
                              use_relu=True)
 
-    h_fc1_drop = tf.nn.dropout(layer_fc1, 0.5)
+    #h_fc1_drop = tf.nn.dropout(layer_fc1, 0.5)
 
-    
     ## SECOND FULLY CONNECTED LAYER ##
-    layer_fc2 = new_fc_layer(input=h_fc1_drop,
+    layer_fc2 = new_fc_layer(input=layer_fc1,
                              num_inputs=fc1_size,
                              num_outputs=fc2_size,
                              use_relu=True)
@@ -358,6 +258,7 @@ def build_cnn(data):
                              num_inputs=fc2_size,
                              num_outputs=num_classes,
                              use_relu=False)
+    
     
     ## SOFTMAX ON OUTPUT LAYER TO GET PROB. DISTRIBUTION ##
     y_pred = tf.nn.softmax(layer_fc3)
