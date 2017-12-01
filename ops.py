@@ -1,3 +1,6 @@
+#Codes for implmenting layers. 
+#May have different function for same layer because of testing performance of slight changes.
+
 import tensorflow as tf
 import numpy as np
 
@@ -15,7 +18,6 @@ def new_biases(length):
     """
     return tf.Variable(tf.constant(0.0, shape=[length]),dtype=tf.float32)
     #return tf.get_variable('b', shape, initializer=tf.constant_initializer(0.))
-
 
 def new_conv_layer(input,              # The previous layer
                    num_input_channels, # Num. channels in prev. layer
@@ -55,7 +57,6 @@ def new_conv_layer(input,              # The previous layer
     
     return layer, weights
 
-
 def flatten_layer(layer):
     """
     Reduces a 4d tensor to a 2d tensor to be able to be fed into a fully connected layer.
@@ -70,7 +71,6 @@ def flatten_layer(layer):
 
     # The shape of the flattened layer is now: [num_images, img_height * img_width * num_channels]
     return layer_flat, num_features
-
 
 def new_fc_layer(input,          # The previous layer.
                  num_inputs,     # Num. inputs from prev. layer.
@@ -94,9 +94,8 @@ def new_fc_layer(input,          # The previous layer.
 
     return layer
 
-
 def weight_variable(shape):
-    #return tf.get_variable('W', shape, initializer=tf.random_normal_initializer(0., 0.02))
+	#xavier initializer
    	return tf.get_variable('W', shape, initializer=tf.contrib.layers.xavier_initializer(uniform=False,dtype=tf.float32))
 
 def bias_variable(shape,value=0.0):

@@ -23,6 +23,14 @@ WHERE:
 @author: Brody Kutt (bjk4704)
 """
 
+#After editing, Zhiyuan 11.30.2017
+'''
+How to run 
+python cnn_predict.py [graph] [testing file] NA
+e.g. python cnn_predict.py weights/17-12-01-acc80-iter500000/cnn_graph cifar/test_batch NA
+
+'''
+
 import tensorflow as tf  # built with version 0.12.1
 import numpy as np
 import sys
